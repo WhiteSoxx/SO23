@@ -53,3 +53,6 @@ while (true) -> opção boa
 como por a thread a correr outra vez ? 
 -> cond_signal acordar uma das threads 
 -> cond_broadcast acordam todas
+
+TERCEIRO EXERCÌCIO:
+>> sinais <<
