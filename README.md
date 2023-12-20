@@ -16,7 +16,11 @@ Server <- Cliente (ligação unidirecional)
 Server -> Cliente
 (2 pipes)
 
-pipe de gestão - fazer a ligação com o cliente 2
+pipe de gestão (para ler e escrever para não se fechar - rw)
+- fazer a ligação com o cliente 2
+- quando o ultimo cliente se desligar temos o EOF
+
+Comandos - enviar no formato q é recebido, não converter em carateres
 
 
 SEGUNDO EXERCICIO: vários clientes
@@ -31,8 +35,7 @@ cliente 3 fica à espera até ter uma thread p ele
 buffer produtor consumidor: termos um conjunto de clientes (consumidores) superior aos recursos (2 threads - produtores)
 logo para isto precisamos de uma camada intermédia (o buffer p c) - variáveis de condição
 
-
->> variáveis de condição <<
+>> Variáveis de condição <<
 maneira de tranmitir sinais entre threads
 têm mutex associado
 
@@ -55,4 +58,4 @@ como por a thread a correr outra vez ?
 -> cond_broadcast acordam todas
 
 TERCEIRO EXERCÌCIO:
->> sinais <<
+>> Sinais <<
