@@ -62,10 +62,13 @@ int main(int argc, char* argv[]) {
     unsigned int event_id;
     size_t num_rows, num_cols, num_seats;
 
+    int out_fd;
+
 
     int fd = open(argv[1], O_RDONLY);
     int resp;
-    read(fd, &operation_code, sizeof(int));
+    if(read(fd, &operation_code, sizeof(int)) > 0) {
+      printf("operation_code: %d\n", operation_code);
     
     //TODO: Read from pipe
     switch(operation_code) {
@@ -77,6 +80,7 @@ int main(int argc, char* argv[]) {
 
         read(fd, a, 40);
         read(fd, b, 40);
+        close(fd);
 
       //if applicable, wait until session can be created
         mkfifo(a, 0640);
@@ -88,37 +92,52 @@ int main(int argc, char* argv[]) {
 
         active_sessions++;
         new_session_id++;
+
+        fd = open(sessions[0].resp_pipe_path, O_WRONLY | O_TRUNC);
+        write(fd, &sessions[0].session_id, sizeof(int));
         break;
-      
-      case 2: // ems_quit
-        //não suporta mais que uma sessão
-        unlink(sessions[0].req_pipe_path);
-        unlink(sessions[0].resp_pipe_path);
-        active_sessions--;
-        sessions[0].session_id = -1; //FIXME, FORMA DE DISTINGUIR ATIVIDADE
-        sessions[0].req_pipe_path = NULL;
-        sessions[0].resp_pipe_path = NULL;
-        break;
+      } 
     }
 
     close(fd);
     fd = open(sessions[0].req_pipe_path, O_RDONLY);
-    read(fd, &operation_code, sizeof(int));
+    if(read(fd, &operation_code, sizeof(int)) > 0) {
+      printf("operation_code: %d\n", operation_code);
       switch(operation_code) {
+        case 2: // ems_quit
+        //não suporta mais que uma sessão
+          close(fd);
+
+          fd = open(sessions[0].resp_pipe_path, O_WRONLY | O_TRUNC);
+        
+          resp = 0;
+          write(fd, &resp, sizeof(int));
+          //atenção a isto, ver enunciado (retorno do quit)
+
+          unlink(sessions[0].req_pipe_path);
+          unlink(sessions[0].resp_pipe_path);
+          remove(sessions[0].req_pipe_path);
+          remove(sessions[0].resp_pipe_path);
+          active_sessions--;
+            sessions[0].session_id = -1; //FIXME, FORMA DE DISTINGUIR ATIVIDADE
+          sessions[0].req_pipe_path = NULL;
+          sessions[0].resp_pipe_path = NULL;
+          exit(0);
+          break;
+
         case 3: // ems_create
           
           // ler os parâmetros do pipe
-          read(fd, &event_id, sizeof(unsigned int));
-          read(fd, &num_rows, sizeof(size_t));
-          read(fd, &num_cols, sizeof(size_t));
-          close(fd);
+            read(fd, &event_id, sizeof(unsigned int));
+            read(fd, &num_rows, sizeof(size_t));
+            read(fd, &num_cols, sizeof(size_t));
+            close(fd);
 
-          // pipe de resposta
-          fd = open(sessions[0].resp_pipe_path, O_WRONLY);
-          resp = ems_create(event_id, num_rows, num_cols);
-          write(fd, &resp, sizeof(int));
-          close(fd);
-          break;
+            // pipe de resposta
+            fd = open(sessions[0].resp_pipe_path, O_WRONLY | O_TRUNC);
+            resp = ems_create(event_id, num_rows, num_cols);
+            write(fd, &resp, sizeof(int));
+            break;
 
         case 4: // ems_reserve
 
@@ -136,7 +155,7 @@ int main(int argc, char* argv[]) {
 
           close(fd);
 
-          fd = open(sessions[0].resp_pipe_path, O_WRONLY);
+          fd = open(sessions[0].resp_pipe_path, O_WRONLY | O_TRUNC);
 
         // pipe de resposta
 
@@ -144,22 +163,20 @@ int main(int argc, char* argv[]) {
 
           write(fd, &resp, sizeof(int));
 
-          close(fd);
           free(xs);
           free(ys);
           break;
       
       case 5: // ems_show
-
+        read(fd, &out_fd, sizeof(int));
         read(fd, &event_id, sizeof(unsigned int));
         close(fd);
 
-        fd = open(sessions[0].resp_pipe_path, O_WRONLY);
+        fd = open(sessions[0].resp_pipe_path, O_WRONLY | O_TRUNC);
 
         //não deve imprimir para aqui!!!
-        resp = ems_show(STDOUT_FILENO, event_id);
-
-        close(fd);
+        resp = ems_show(out_fd, event_id);
+        write(fd, &resp, sizeof(int));
 
         //ver enunciado e dar print de acordo, há outros dados que são precisos escrever,
         //como o int retorno e num_seats etc
@@ -185,16 +202,16 @@ int main(int argc, char* argv[]) {
         break;
 
       case 6: // ems_list_events
-
+        read(fd, &out_fd, sizeof(int));
         read(fd, &event_id, sizeof(unsigned int));
 
         close(fd);
 
-        fd = open(sessions[0].resp_pipe_path, O_WRONLY);
+        fd = open(sessions[0].resp_pipe_path, O_WRONLY | O_TRUNC);
         
         //não deve imprimir para aqui!!!
         resp = ems_list_events(STDOUT_FILENO);
-        close(fd);
+        write(fd, &resp, sizeof(int));
 
         //ver enunciado e dar print de acordo, há outros dados que são precisos escrever,
         //como o int retorno e num_seats etc
@@ -218,11 +235,14 @@ int main(int argc, char* argv[]) {
         */
         break;
     }
+    
     //TODO: Write new client to the producer-consumer buffer
+  } close(fd);
   }
 
   //TODO: Close Server
   unlink(argv[1]);
+  remove(argv[1]);
 
   ems_terminate();
 }
