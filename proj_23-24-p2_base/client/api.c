@@ -1,12 +1,37 @@
 #include "api.h"
+#include "common/constants.h"
+
+#include <fcntl.h>
+
+char const* own_req_pipe_path;
+char const* own_resp_pipe_path;
+
+// Variáveis globais
+int session_id;
 
 int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const* server_pipe_path) {
-  //TODO: create pipes and connect to the server
-  return 1;
+
+  //FIXME aqui escreve para o pipe?????? e aguarda o retorno????
+
+  own_req_pipe_path = req_pipe_path;
+  own_resp_pipe_path = resp_pipe_path;
+
+  int fd = open(server_pipe_path, O_WRONLY);
+  write(fd, 1, sizeof(int));
+  write(fd, own_req_pipe_path, 40* sizeof(char));
+  write(fd, own_resp_pipe_path, 40 * sizeof(char));
+
+  //ESPERAR PELA RESPOSTA DO SERVIDOR ANTES DE CONTINUAR
+  read(own_resp_pipe_path, &session_id, sizeof(int));
+  //if isto falhar, imprime mensagem de erro e lança uma mensagem de login quando der
+  //FIXME \n
+
+  //FIXME RETURN???
+  return session_id;
 }
 
 int ems_quit(void) { 
-  //TODO: close pipes
+
   return 1;
 }
 

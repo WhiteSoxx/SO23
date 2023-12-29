@@ -3,6 +3,7 @@ Entrega: 5 de janeiro
 
 Temos cliente e servidor, em vez do ems
 
+
 >> Pipes <<
 echoo "hello world" | ./main
 
@@ -20,6 +21,8 @@ pipe de gestão (para ler e escrever para não se fechar - rw)
 - fazer a ligação com o cliente 2
 - quando o ultimo cliente se desligar temos o EOF
 
+Criar cliende = ligar as pipes
+
 Comandos - enviar no formato q é recebido, não converter em carateres
 
 
@@ -34,6 +37,11 @@ cliente 3 fica à espera até ter uma thread p ele
 
 buffer produtor consumidor: termos um conjunto de clientes (consumidores) superior aos recursos (2 threads - produtores)
 logo para isto precisamos de uma camada intermédia (o buffer p c) - variáveis de condição
++ consumidores (clientes) que produtores (threads)
+
+Buffer - camada intermédia entre server/threads e clientes, coordena a situação
+Implementar COM variavéis de condição
+
 
 >> Variáveis de condição <<
 maneira de tranmitir sinais entre threads
@@ -52,10 +60,12 @@ while (true) -> opção boa
   if cout > 0
     cond_wait(c_cout)
   if cond == 0
-    break
+    
+    
 como por a thread a correr outra vez ? 
 -> cond_signal acordar uma das threads 
--> cond_broadcast acordam todas
+-> cond_broadcast acordam todas as threads
+
 
 TERCEIRO EXERCÌCIO:
 >> Sinais <<
