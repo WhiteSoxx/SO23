@@ -65,7 +65,7 @@ int main(int argc, char* argv[]) {
     int out_fd;
 
 
-    int fd = open(argv[1], O_RDONLY);
+    int fd = open(argv[1], O_RDONLY | O_NONBLOCK);
     int resp;
     if(read(fd, &operation_code, sizeof(int)) > 0) {
       printf("operation_code: %d\n", operation_code);
@@ -237,7 +237,8 @@ int main(int argc, char* argv[]) {
     }
     
     //TODO: Write new client to the producer-consumer buffer
-  } close(fd);
+  } 
+  close(fd);
   }
 
   //TODO: Close Server
