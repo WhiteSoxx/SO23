@@ -63,7 +63,7 @@ int main(int argc, char* argv[]) {
     size_t num_rows, num_cols, num_seats;
 
     int out_fd;
-
+    int resp;
 
     int fd = open(argv[1], O_RDONLY | O_NONBLOCK);
     int resp;
@@ -174,31 +174,19 @@ int main(int argc, char* argv[]) {
 
         fd = open(sessions[0].resp_pipe_path, O_WRONLY | O_TRUNC);
 
-        //não deve imprimir para aqui!!!
-        resp = ems_show(out_fd, event_id);
+        size_t num_rows, num_cols;
+        unsigned int* seats;
+        resp = ems_show(out_fd, event_id, &num_rows, &num_cols, &seats);
         write(fd, &resp, sizeof(int));
 
         //ver enunciado e dar print de acordo, há outros dados que são precisos escrever,
-        //como o int retorno e num_seats etc
-
-        /* // pipe de resposta
-        int resp = ems_show(sbvnmkd, event_id);
-
-        write(argv[1], &resp, sizeof(int));
-
-        size_t num_rows, num_cols;
-        unsigned int* seats;
-
-        num_rows = ;
-        num_cols = ;
-        seats = malloc();
-
-        write(argv[1], &num_rows, sizeof(size_t));
-        write(argv[1], &num_cols, sizeof(size_t));
-        write(argv[1], seats, num_rows * num_cols * sizeof(unsigned int));
-
-        free(seats);
-        */
+        write(fd, &resp, sizeof(int));
+        if (resp == 0) {
+          write(fd, &num_rows, sizeof(size_t));
+          write(fd, &num_cols, sizeof(size_t));
+          write(fd, seats, num_rows * num_cols * sizeof(unsigned int));
+          free(seats); // alocada no api.c
+        }
         break;
 
       case 6: // ems_list_events
@@ -209,30 +197,17 @@ int main(int argc, char* argv[]) {
 
         fd = open(sessions[0].resp_pipe_path, O_WRONLY | O_TRUNC);
         
-        //não deve imprimir para aqui!!!
-        resp = ems_list_events(STDOUT_FILENO);
-        write(fd, &resp, sizeof(int));
-
-        //ver enunciado e dar print de acordo, há outros dados que são precisos escrever,
-        //como o int retorno e num_seats etc
-        
-        
-        /* // pipe de resposta
-        int resp = ems_list_events(fghj); 
-        
-        write(argv[1], &resp, sizeof(int));
-
         size_t num_events;
         unsigned int* ids;
+        int resp = ems_list_events(out_fd, &num_events, &ids);
         
-        num_events = ;
-        ids = malloc();
-        
-        write(argv[1], &num_events, sizeof(size_t));
-        write(argv[1], ids, num_events * sizeof(unisgned int));
+        write(fd, &resp, sizeof(int));
 
-        free(ids);
-        */
+        if (resp == 0) {
+          write(fd, &num_events, sizeof(size_t));
+          write(fd, ids, num_events * sizeof(unsigned int));
+          free(ids);
+        }
         break;
     }
     

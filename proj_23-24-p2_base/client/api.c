@@ -96,11 +96,11 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
     sleep(1);
   }
   close(fd);
-  printf("reserve response: %d\n", response);
+  printf("Reserve response: %d\n", response);
   return response;
 }
 
-int ems_show(int out_fd, unsigned int event_id) {
+int ems_show(int out_fd, unsigned int event_id, size_t* num_rows, size_t* num_cols, unsigned int** seats) {
   //TODO: send show request to the server (through the request pipe) and wait for the response (through the response pipe)
   int command = 5;
   int fd = open(own_req_pipe_path, O_WRONLY | O_TRUNC);
@@ -114,12 +114,22 @@ int ems_show(int out_fd, unsigned int event_id) {
   while(read(fd, &response, sizeof(int)) < 1) {
     sleep(1);
   }
+
+  if (response == 0) {
+    read(fd, num_rows, sizeof(size_t));
+    read(fd, num_cols, sizeof(size_t));
+
+    *seats = malloc((*num_rows) * (*num_cols) * sizeof(unsigned int));
+
+    read(fd, *seats, (*num_rows) * (*num_cols) * (sizeof(unsigned int)));
+  }
+
   close(fd);
   printf("show response: %d\n", response);
   return response;
 }
 
-int ems_list_events(int out_fd) {
+int ems_list_events(int out_fd, size_t* num_events, unsigned int** ids) {
   //TODO: send list request to the server (through the request pipe) and wait for the response (through the response pipe)
   int command = 6;
   int fd = open(own_req_pipe_path, O_WRONLY | O_TRUNC);
@@ -131,6 +141,14 @@ int ems_list_events(int out_fd) {
   int response;
   while(read(fd, &response, sizeof(int)) < 1) {
     sleep(1);
+  }
+
+  if (response == 0) {
+    read(fd, num_events, sizeof(size_t));
+
+    *ids = malloc((*num_events) * sizeof(unsigned int));
+
+    read(fd, *ids, (*num_events) * sizeof(unsigned int));
   }
   close(fd);
 
