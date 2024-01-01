@@ -20,6 +20,23 @@ int new_session_id = 0;
 // pode servir como index para o array de sessions?
 sessions_t *sessions;
 
+/*
+// estrutura do buffer produtor-consumidor
+typedef struct {
+    int* buffer;
+    int size;
+    int front;
+    int rear;
+    pthread_mutex_t mutex;
+    pthread_cond_t not_empty;
+    pthread_cond_t not_full;
+} request_buffer_t; 
+
+request_buffer_t request_buffer;
+*/
+
+void* process_client_requests(void* arg);
+
 int main(int argc, char* argv[]) {
   if (argc < 2 || argc > 3) {
     fprintf(stderr, "Usage: %s\n <pipe_path> [delay]\n", argv[0]);
@@ -44,27 +61,57 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  int active_sessions = 0;
   sessions = malloc(S * sizeof(sessions_t));
 
   mkfifo(argv[1], 0640);
 
   //TODO: Intialize server, create worker threads FIXME
+  pthread_t hostThread;
+  pthread_create(&hostThread, NULL, process_client_requests, (void*)argv[1]);
+
+  process_client_requests(argv[1]);
+
+  /*
+  // Criação de threads trabalhadoras
+  pthread_t workerThreads[S];
+  */
+
+  pthread_join(hostThread, NULL);  // espera que a thread do cliente termine
+
+  /*
+  // espera que as threads trabalhadoras terminem
+  for (int i = 0; i < S; ++i) {
+      pthread_join(workerThreads[i], NULL);
+  }
+  */
+
+  // Close Server
+  unlink(argv[1]);
+  remove(argv[1]);
+
+  ems_terminate();
+  return 0;
+}
+
+// função para processar os pedidos dos clientes
+void* process_client_requests(void* arg) {
+  const char* server_pipe = (const char*)arg;
+  int active_sessions = 0;
+  int operation_code;
+  int fd;
+
+  unsigned int event_id;
+  size_t num_rows, num_cols, num_seats;
+  int resp;
 
   while (1) {
     //TODO: Read from each client pipe
     // (different functions, the client one will be a loop where the thread never exits,
     // and the main one will be a loop where the thread exits when the server pipe is closed,
     // always checking for new login requests)
-    int operation_code;
-    int fd;
 
-    unsigned int event_id;
-    size_t num_rows, num_cols, num_seats;
-
-    int resp;
     if(active_sessions == 0) {
-    fd = open(argv[1], O_RDONLY);
+    fd = open(server_pipe, O_RDONLY);
     if(read(fd, &operation_code, sizeof(int)) > 0) {
       printf("operation_code: %d\n", operation_code);
     
@@ -187,10 +234,5 @@ int main(int argc, char* argv[]) {
     } 
     close(fd);
   }
-
-  // Close Server
-  unlink(argv[1]);
-  remove(argv[1]);
-
-  ems_terminate();
+  pthread_exit(NULL);
 }
