@@ -2,10 +2,13 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <signal.h>
 
 #include "api.h"
 #include "common/constants.h"
 #include "parser.h"
+
+
 
 int main(int argc, char* argv[]) {
   if (argc < 5) {

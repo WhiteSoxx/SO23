@@ -43,7 +43,6 @@ int new_session_id = 0;
 // pode servir como index para o array de sessions?
 sessions_t* sessions;
 
-
 request_buffer_t request_buffer;
 
 void* thread_workplace(void* arg) {
@@ -72,7 +71,7 @@ void* thread_workplace(void* arg) {
   printf("session_id: %d\n", session->session_id);
   active = 1;
   
-  fd = open(session->resp_pipe_path, O_WRONLY | O_TRUNC);
+  fd = open(session->resp_pipe_path, O_WRONLY);
         write(fd, &session->session_id, sizeof(int));
   close(fd);
 
@@ -82,15 +81,14 @@ void* thread_workplace(void* arg) {
       printf("operation_code: %d\n", operation_code);
       switch(operation_code) {
         case 2: // ems_quit
-        // não suporta mais que uma sessão
+          // não suporta mais que uma sessão
           close(fd);
 
-          fd = open(session->resp_pipe_path, O_WRONLY | O_TRUNC);
+          fd = open(session->resp_pipe_path, O_WRONLY);
         
           resp = 0;
           write(fd, &resp, sizeof(int));
           // FIXME atenção a isto, ver enunciado (retorno do quit)
-
 
           unlink(session->req_pipe_path);
           unlink(session->resp_pipe_path);
@@ -132,7 +130,7 @@ void* thread_workplace(void* arg) {
 
           close(fd);
 
-          fd = open(session->resp_pipe_path, O_WRONLY | O_TRUNC);
+          fd = open(session->resp_pipe_path, O_WRONLY | O_TRUNC); //FIXME
 
           // pipe de resposta
           resp = ems_reserve(event_id, num_seats, xs, ys);
@@ -148,7 +146,7 @@ void* thread_workplace(void* arg) {
           read(fd, &event_id, sizeof(unsigned int));
           close(fd);
 
-          fd = open(session->resp_pipe_path, O_WRONLY | O_TRUNC);
+          fd = open(session->resp_pipe_path, O_WRONLY);
           
           // pipe de resposta dentro do ems_show
           ems_show(fd, event_id);
@@ -157,7 +155,7 @@ void* thread_workplace(void* arg) {
         case 6: // ems_list_events
           close(fd);
 
-          fd = open(session->resp_pipe_path, O_WRONLY | O_TRUNC);
+          fd = open(session->resp_pipe_path, O_WRONLY);
 
           // pipe de resposta dentro do ems_list_events
           ems_list_events(fd);
@@ -176,16 +174,14 @@ void* thread_workplace(void* arg) {
 int process_client_requests(char* server_pipe) {
   // int active_sessions = 0;
   int operation_code;
-  int fd;
+  int fd = open(server_pipe, O_RDONLY | O_NONBLOCK);
 
-  while (1) {
     //TODO: Read from each client pipe
     // (different functions, the client one will be a loop where the thread never exits,
     // and the main one will be a loop where the thread exits when the server pipe is closed,
     // always checking for new login requests)
-
-    fd = open(server_pipe, O_RDONLY);
-    if(read(fd, &operation_code, sizeof(int)) > 0) {
+  while (1) {
+    if(read(fd, &operation_code, sizeof(int)) != 0) {
       printf("operation_code: %d\n", operation_code);
     
     // Read from pipe
@@ -198,7 +194,6 @@ int process_client_requests(char* server_pipe) {
 
         read(fd, a, 40);
         read(fd, b, 40);
-        close(fd);
 
       // if applicable, wait until session can be created
         pthread_mutex_lock(&request_buffer.mutex);
@@ -216,7 +211,7 @@ int process_client_requests(char* server_pipe) {
         pthread_cond_signal(&request_buffer.not_empty);
         pthread_mutex_unlock(&request_buffer.mutex); 
       } 
-    } close(fd); 
+    }
   }
   return 0;
 }
