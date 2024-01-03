@@ -47,10 +47,13 @@ sessions_t* sessions;
 
 request_buffer_t request_buffer;
 
-void* thread_workplace(void* arg) {
-  sessions_t* session = (sessions_t*)arg;
+void* thread_workplace(void* thread_id) {
+  int session_id = *(int*)thread_id;
   char operation_code;
   int fd;
+
+  char req_pipe_path[40];
+  char resp_pipe_path[40];
 
   unsigned int event_id;
   size_t num_rows, num_cols, num_seats;
@@ -60,34 +63,35 @@ void* thread_workplace(void* arg) {
 
   while(1) {
   pthread_mutex_lock(&request_buffer.mutex);
-  pthread_cond_wait(&request_buffer.not_empty, &request_buffer.mutex);
+  while(request_buffer.size == 0) pthread_cond_wait(&request_buffer.not_empty, &request_buffer.mutex);
   //session = &request_buffer.buffer[request_buffer.front];
   //FIXME
-  session->req_pipe_path = request_buffer.buffer[request_buffer.front].req_pipe_path;
-  session->resp_pipe_path = request_buffer.buffer[request_buffer.front].resp_pipe_path;
-  request_buffer.front = (request_buffer.front + 1) % S;
+  strcpy(req_pipe_path, request_buffer.buffer[request_buffer.front].req_pipe_path);
+  strcpy(resp_pipe_path, request_buffer.buffer[request_buffer.front].resp_pipe_path);
+  request_buffer.front++;
+  if(request_buffer.front == S) request_buffer.front = 0;
   request_buffer.size--;
 
 
-  printf("session_id: %d\n", session->session_id);
+  printf("session_id: %d\n", session_id);
   active = 1;
   
-  fd = open(session->resp_pipe_path, O_WRONLY | O_TRUNC);
+  fd = open(resp_pipe_path, O_WRONLY | O_TRUNC);
   if(fd == -1) {
     fprintf(stderr, "[Err]: open failed: %d\n",(errno));
     exit(EXIT_FAILURE);
   }
-  write(fd, &session->session_id, sizeof(int));
+  write(fd, &session_id, sizeof(int));
   close(fd);
 
   pthread_cond_signal(&request_buffer.not_full);
   pthread_mutex_unlock(&request_buffer.mutex);
 
   while(active) {
-  fd = open(session->req_pipe_path, O_RDONLY);
+  fd = open(req_pipe_path, O_RDONLY);
     if(read(fd, &operation_code, sizeof(char)) > 0) {
       puts("operation_code: ");
-      printf("%d\n", session->session_id);
+      printf("%d\n", session_id);
       switch(operation_code) {
         case '2': // ems_quit
         // não suporta mais que uma sessão
@@ -95,14 +99,10 @@ void* thread_workplace(void* arg) {
         
           // FIXME atenção a isto, ver enunciado (retorno do quit)
 
-          unlink(session->req_pipe_path);
-          unlink(session->resp_pipe_path);
-          remove(session->req_pipe_path);
-          remove(session->resp_pipe_path);
-          session->req_pipe_path = NULL;
-          session->resp_pipe_path = NULL;
+          unlink(req_pipe_path);
+          unlink(resp_pipe_path);
           active = 0;
-          printf("quit!\n");
+          puts("quit!\n");
           break;
 
         case '3': // ems_create
@@ -114,7 +114,7 @@ void* thread_workplace(void* arg) {
             close(fd);
 
             // pipe de resposta
-            fd = open(session->resp_pipe_path, O_WRONLY | O_TRUNC);
+            fd = open(resp_pipe_path, O_WRONLY | O_TRUNC);
             resp = ems_create(event_id, num_rows, num_cols);
             write(fd, &resp, sizeof(int));
             break;
@@ -135,7 +135,7 @@ void* thread_workplace(void* arg) {
 
           close(fd);
 
-          fd = open(session->resp_pipe_path, O_WRONLY | O_TRUNC);
+          fd = open(resp_pipe_path, O_WRONLY | O_TRUNC);
 
           // pipe de resposta
           resp = ems_reserve(event_id, num_seats, xs, ys);
@@ -151,7 +151,7 @@ void* thread_workplace(void* arg) {
           read(fd, &event_id, sizeof(unsigned int));
           close(fd);
 
-          fd = open(session->resp_pipe_path, O_WRONLY | O_TRUNC);
+          fd = open(resp_pipe_path, O_WRONLY | O_TRUNC);
           
           // pipe de resposta dentro do ems_show
           ems_show(fd, event_id);
@@ -160,7 +160,7 @@ void* thread_workplace(void* arg) {
         case '6': // ems_list_events
           close(fd);
 
-          fd = open(session->resp_pipe_path, O_WRONLY | O_TRUNC);
+          fd = open(resp_pipe_path, O_WRONLY | O_TRUNC);
 
           // pipe de resposta dentro do ems_list_events
           ems_list_events(fd);
@@ -200,22 +200,23 @@ int process_client_requests(char* server_pipe) {
 
         read(fd, a, 40);
         read(fd, b, 40);
-        printf("waiting!\n");
+        puts("waiting!\n");
         printf("a: %s\n", a);
         printf("b: %s\n", b);
 
 
       // if applicable, wait until session can be created
         pthread_mutex_lock(&request_buffer.mutex);
-        if(request_buffer.size == S)
+        while(request_buffer.size == S) {
+          puts("waiting for buffer to be empty!\n");
           pthread_cond_wait(&request_buffer.not_full, &request_buffer.mutex);
+        }
         sessions_t* new_session = malloc(sizeof(sessions_t));
         new_session->req_pipe_path = a;
         new_session->resp_pipe_path = b;
-        //new_session->request_buffer = &request_buffer;
-
         request_buffer.buffer[request_buffer.rear] = *new_session;
-        request_buffer.rear = (request_buffer.rear + 1) % S;
+        request_buffer.rear++;
+        if(request_buffer.rear == S) request_buffer.rear = 0;
         request_buffer.size++;
 
         pthread_cond_signal(&request_buffer.not_empty);
@@ -263,11 +264,9 @@ int main(int argc, char* argv[]) {
   server_pipe_path = argv[1];
 
   for(int i = 0; i < S; i++) {
-    sessions[i].session_id = i;
-    sessions[i].req_pipe_path = NULL;
-    sessions[i].resp_pipe_path = NULL;
-    sessions[i].request_buffer = &request_buffer;
-    pthread_create(&sessions[i].thread, NULL, thread_workplace, (void*)&sessions[i]);
+    int* session_id = malloc(sizeof(int));
+    *session_id = i;
+    pthread_create(&sessions[i].thread, NULL, thread_workplace, (void*)session_id);
   }
 
   process_client_requests(argv[1]);
