@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <pthread.h>
+#include <errno.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -48,7 +49,7 @@ request_buffer_t request_buffer;
 
 void* thread_workplace(void* arg) {
   sessions_t* session = (sessions_t*)arg;
-  int operation_code;
+  char operation_code;
   int fd;
 
   unsigned int event_id;
@@ -66,31 +67,33 @@ void* thread_workplace(void* arg) {
   session->resp_pipe_path = request_buffer.buffer[request_buffer.front].resp_pipe_path;
   request_buffer.front = (request_buffer.front + 1) % S;
   request_buffer.size--;
-  pthread_cond_signal(&request_buffer.not_full);
-  pthread_mutex_unlock(&request_buffer.mutex);
+
 
   printf("session_id: %d\n", session->session_id);
   active = 1;
   
   fd = open(session->resp_pipe_path, O_WRONLY | O_TRUNC);
-        write(fd, &session->session_id, sizeof(int));
+  if(fd == -1) {
+    fprintf(stderr, "[Err]: open failed: %d\n",(errno));
+    exit(EXIT_FAILURE);
+  }
+  write(fd, &session->session_id, sizeof(int));
   close(fd);
+
+  pthread_cond_signal(&request_buffer.not_full);
+  pthread_mutex_unlock(&request_buffer.mutex);
 
   while(active) {
   fd = open(session->req_pipe_path, O_RDONLY);
-    if(read(fd, &operation_code, sizeof(int)) > 0) {
-      printf("operation_code: %d\n", operation_code);
+    if(read(fd, &operation_code, sizeof(char)) > 0) {
+      puts("operation_code: ");
+      printf("%d\n", session->session_id);
       switch(operation_code) {
-        case 2: // ems_quit
+        case '2': // ems_quit
         // não suporta mais que uma sessão
           close(fd);
-
-          fd = open(session->resp_pipe_path, O_WRONLY | O_TRUNC);
         
-          resp = 0;
-          write(fd, &resp, sizeof(int));
           // FIXME atenção a isto, ver enunciado (retorno do quit)
-
 
           unlink(session->req_pipe_path);
           unlink(session->resp_pipe_path);
@@ -102,7 +105,7 @@ void* thread_workplace(void* arg) {
           printf("quit!\n");
           break;
 
-        case 3: // ems_create
+        case '3': // ems_create
           
             // ler pipe
             read(fd, &event_id, sizeof(unsigned int));
@@ -116,7 +119,7 @@ void* thread_workplace(void* arg) {
             write(fd, &resp, sizeof(int));
             break;
 
-        case 4: // ems_reserve
+        case '4': // ems_reserve
 
           // ler pipe
           read(fd, &event_id, sizeof(unsigned int));
@@ -143,7 +146,7 @@ void* thread_workplace(void* arg) {
           free(ys);
           break;
       
-        case 5: // ems_show
+        case '5': // ems_show
           // ler pipe
           read(fd, &event_id, sizeof(unsigned int));
           close(fd);
@@ -154,7 +157,7 @@ void* thread_workplace(void* arg) {
           ems_show(fd, event_id);
           break;
 
-        case 6: // ems_list_events
+        case '6': // ems_list_events
           close(fd);
 
           fd = open(session->resp_pipe_path, O_WRONLY | O_TRUNC);
@@ -175,8 +178,9 @@ void* thread_workplace(void* arg) {
 
 int process_client_requests(char* server_pipe) {
   // int active_sessions = 0;
-  int operation_code;
+  char operation_code;
   int fd;
+  fd = open(server_pipe, O_RDONLY);
 
   while (1) {
     //TODO: Read from each client pipe
@@ -184,13 +188,11 @@ int process_client_requests(char* server_pipe) {
     // and the main one will be a loop where the thread exits when the server pipe is closed,
     // always checking for new login requests)
 
-    fd = open(server_pipe, O_RDONLY);
-    if(read(fd, &operation_code, sizeof(int)) > 0) {
-      printf("operation_code: %d\n", operation_code);
     
+    if(read(fd, &operation_code, sizeof(char)) > 0) {
     // Read from pipe
     switch(operation_code) { // login
-      case 1:
+      case '1':
         char a[40];
         char b[40];
         memset(a, '\0', 40);
@@ -198,7 +200,10 @@ int process_client_requests(char* server_pipe) {
 
         read(fd, a, 40);
         read(fd, b, 40);
-        close(fd);
+        printf("waiting!\n");
+        printf("a: %s\n", a);
+        printf("b: %s\n", b);
+
 
       // if applicable, wait until session can be created
         pthread_mutex_lock(&request_buffer.mutex);
@@ -216,7 +221,7 @@ int process_client_requests(char* server_pipe) {
         pthread_cond_signal(&request_buffer.not_empty);
         pthread_mutex_unlock(&request_buffer.mutex); 
       } 
-    } close(fd); 
+    }
   }
   return 0;
 }

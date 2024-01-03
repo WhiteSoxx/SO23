@@ -173,6 +173,7 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
   return 0;
 }
 
+
 int ems_show(int out_fd, unsigned int event_id) { //isto tem de ser com um buffer por causa do int retorno
   if (event_list == NULL) {
     fprintf(stderr, "EMS state must be initialized\n");
