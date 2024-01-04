@@ -5,6 +5,7 @@
 #include <string.h>
 #include <pthread.h>
 #include <errno.h>
+#include <signal.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -44,13 +45,25 @@ int new_session_id = 0;
 // pode servir como index para o array de sessions?
 sessions_t* sessions;
 
+int signal_received = 0;
+
 
 request_buffer_t request_buffer;
+
+void signal_handler(int signal) {
+  if(signal == SIGUSR1)
+    signal_received = 1;
+  }
 
 void* thread_workplace(void* thread_id) {
   int session_id = *(int*)thread_id;
   char operation_code;
   int fd;
+
+  sigset_t mask;
+  sigemptyset(&mask);
+  sigaddset(&mask, SIGUSR1);
+  pthread_sigmask(SIG_BLOCK, &mask, NULL);
 
   char req_pipe_path[40];
   char resp_pipe_path[40];
@@ -63,7 +76,9 @@ void* thread_workplace(void* thread_id) {
 
   while(1) {
   pthread_mutex_lock(&request_buffer.mutex);
+  printf("got in: %d\n", session_id);
   while(request_buffer.size == 0) pthread_cond_wait(&request_buffer.not_empty, &request_buffer.mutex);
+  printf("got out: %d\n", session_id);
   //session = &request_buffer.buffer[request_buffer.front];
   //FIXME
   strcpy(req_pipe_path, request_buffer.buffer[request_buffer.front].req_pipe_path);
@@ -182,11 +197,18 @@ int process_client_requests(char* server_pipe) {
   int fd;
   fd = open(server_pipe, O_RDONLY);
 
+  signal(SIGUSR1, signal_handler);
+
   while (1) {
     //TODO: Read from each client pipe
     // (different functions, the client one will be a loop where the thread never exits,
     // and the main one will be a loop where the thread exits when the server pipe is closed,
     // always checking for new login requests)
+
+    if(signal_received) {
+      status_signal();
+      signal_received = 0;
+    }
 
     
     if(read(fd, &operation_code, sizeof(char)) > 0) {

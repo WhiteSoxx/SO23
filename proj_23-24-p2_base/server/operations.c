@@ -10,6 +10,52 @@
 static struct EventList* event_list = NULL;
 static unsigned int state_access_delay_us = 0;
 
+int status_signal() {
+    for (struct ListNode* current = event_list->head; current != NULL; current = current->next) {
+      printf("Event: %u\n", ((struct Event*)current->event)->id);
+      
+      if (event_list == NULL) {
+        fprintf(stderr, "EMS state must be initialized\n");
+        return 1;
+      }
+
+      //get event with delay??????
+
+      if (current == NULL) {
+        fprintf(stderr, "Event not found\n");
+        return 1;
+      }
+
+      pthread_rwlock_wrlock(&event_list->rwl);
+      for (size_t i = 1; i <= current->event->rows; i++) {
+        for (size_t j = 1; j <= current->event->cols; j++) {
+          char line_buffer[16];
+
+          sprintf(line_buffer, "%u", current->event->data[(i - 1) * current->event->cols + j - 1]);
+
+          if (print_str(STDOUT_FILENO, line_buffer)) {
+            perror("Error writing to file descriptor");
+            return 1;
+          }
+
+          if (j < current->event->cols) {
+            if (print_str(STDOUT_FILENO, " ")) {
+              perror("Error writing to file descriptor");
+              return 1;
+            }
+          }
+        }
+
+        if (print_str(STDOUT_FILENO, "\n")) {
+          perror("Error writing to file descriptor");
+          return 1;
+        } 
+      }
+      pthread_rwlock_unlock(&event_list->rwl);
+    }
+    return 0;
+}
+
 /// Gets the event with the given ID from the state.
 /// @note Will wait to simulate a real system accessing a costly memory resource.
 /// @param event_id The ID of the event to get.
