@@ -16,8 +16,6 @@
 #include "common/io.h"
 #include "operations.h"
 
-#define S 3 //FIXME
-
 typedef struct sessions sessions_t;
 
 // estrutura do buffer produtor-consumidor
@@ -31,6 +29,7 @@ typedef struct {
     pthread_cond_t not_full;
 } request_buffer_t; 
 
+// estrutura de cada sessão
 typedef struct sessions {
   pthread_t thread;
   int session_id;
@@ -40,21 +39,23 @@ typedef struct sessions {
 } sessions_t;
 
 char* server_pipe_path;
-int new_session_id = 0;
-//session id tem de ser novo para todos os futuros clientes ou
-// pode servir como index para o array de sessions?
 sessions_t* sessions;
 
+// variáveis globais
+int new_session_id = 0;
 int signal_received = 0;
-
 
 request_buffer_t request_buffer;
 
+
+// função que envia o sinal SIGUSR1 para o processo
 void signal_handler(int signal) {
   if(signal == SIGUSR1)
     signal_received = 1;
-  }
+}
 
+
+// função que trata de enviar o sinal para o processo e espera que este seja tratado para continuar
 void* thread_workplace(void* thread_id) {
   int session_id = *(int*)thread_id;
   char operation_code;
@@ -71,7 +72,6 @@ void* thread_workplace(void* thread_id) {
   unsigned int event_id;
   size_t num_rows, num_cols, num_seats;
   int resp;
-  
   int active;
 
   while(1) {
@@ -79,20 +79,17 @@ void* thread_workplace(void* thread_id) {
   printf("got in: %d\n", session_id);
   while(request_buffer.size == 0) pthread_cond_wait(&request_buffer.not_empty, &request_buffer.mutex);
   printf("got out: %d\n", session_id);
-  //session = &request_buffer.buffer[request_buffer.front];
-  //FIXME
   strcpy(req_pipe_path, request_buffer.buffer[request_buffer.front].req_pipe_path);
   strcpy(resp_pipe_path, request_buffer.buffer[request_buffer.front].resp_pipe_path);
   request_buffer.front++;
   if(request_buffer.front == S) request_buffer.front = 0;
   request_buffer.size--;
 
-
   printf("session_id: %d\n", session_id);
   active = 1;
   
   fd = open(resp_pipe_path, O_WRONLY | O_TRUNC);
-  if(fd == -1) {
+  if(fd == -1) { // safe open
     fprintf(stderr, "[Err]: open failed: %d\n",(errno));
     exit(EXIT_FAILURE);
   }
@@ -109,11 +106,9 @@ void* thread_workplace(void* thread_id) {
       printf("%d\n", session_id);
       switch(operation_code) {
         case '2': // ems_quit
-        // não suporta mais que uma sessão
+          
+          // não suporta mais que uma sessão
           close(fd);
-        
-          // FIXME atenção a isto, ver enunciado (retorno do quit)
-
           unlink(req_pipe_path);
           unlink(resp_pipe_path);
           active = 0;
@@ -162,6 +157,7 @@ void* thread_workplace(void* thread_id) {
           break;
       
         case '5': // ems_show
+
           // ler pipe
           read(fd, &event_id, sizeof(unsigned int));
           close(fd);
@@ -173,6 +169,7 @@ void* thread_workplace(void* thread_id) {
           break;
 
         case '6': // ems_list_events
+
           close(fd);
 
           fd = open(resp_pipe_path, O_WRONLY | O_TRUNC);
@@ -181,8 +178,6 @@ void* thread_workplace(void* thread_id) {
           ems_list_events(fd);
           break;
     }
-    
-    //TODO: Write new client to the producer-consumer buffer
     }
     close(fd);
   }
@@ -191,8 +186,8 @@ void* thread_workplace(void* thread_id) {
 }
 
 
+// função que processa os pedidos dos clientes
 int process_client_requests(char* server_pipe) {
-  // int active_sessions = 0;
   char operation_code;
   int fd;
   fd = open(server_pipe, O_RDONLY);
@@ -200,16 +195,10 @@ int process_client_requests(char* server_pipe) {
   signal(SIGUSR1, signal_handler);
 
   while (1) {
-    //TODO: Read from each client pipe
-    // (different functions, the client one will be a loop where the thread never exits,
-    // and the main one will be a loop where the thread exits when the server pipe is closed,
-    // always checking for new login requests)
-
     if(signal_received) {
       status_signal();
       signal_received = 0;
     }
-
     
     if(read(fd, &operation_code, sizeof(char)) > 0) {
     // Read from pipe
@@ -226,8 +215,6 @@ int process_client_requests(char* server_pipe) {
         printf("a: %s\n", a);
         printf("b: %s\n", b);
 
-
-      // if applicable, wait until session can be created
         pthread_mutex_lock(&request_buffer.mutex);
         while(request_buffer.size == S) {
           puts("waiting for buffer to be empty!\n");
@@ -249,6 +236,7 @@ int process_client_requests(char* server_pipe) {
   return 0;
 }
 
+// função main
 int main(int argc, char* argv[]) {
   if (argc < 2 || argc > 3) {
     fprintf(stderr, "Usage: %s\n <pipe_path> [delay]\n", argv[0]);
@@ -292,20 +280,6 @@ int main(int argc, char* argv[]) {
   }
 
   process_client_requests(argv[1]);
-
-  /*
-  // Criação de threads trabalhadoras
-  pthread_t workerThreads[S];
-  */
-
-
-
-  /*
-  // espera que as threads trabalhadoras terminem
-  for (int i = 0; i < S; ++i) {
-      pthread_join(workerThreads[i], NULL);
-  }
-  */
 
   // Close Server
   unlink(argv[1]);

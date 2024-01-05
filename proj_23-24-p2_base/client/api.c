@@ -4,8 +4,6 @@
 
 #include <fcntl.h>
 #include <unistd.h>
-
-#include <stdio.h> //remover, só para o print de teste
 #include <stdlib.h>
 #include <string.h>
 
@@ -14,6 +12,7 @@ char const* own_resp_pipe_path;
 
 // Variáveis globais
 int session_id;
+
 
 int wait_for_response(int fd) {
   int response;
@@ -26,10 +25,8 @@ int wait_for_response(int fd) {
   return 0;
 }
 
+
 int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const* server_pipe_path) {
-
-  //FIXME aqui escreve para o pipe?????? e aguarda o retorno????
-
   own_req_pipe_path = req_pipe_path;
   own_resp_pipe_path = resp_pipe_path;
   mkfifo(req_pipe_path, 0640);
@@ -45,16 +42,15 @@ int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const*
   write(fd, buffer, sizeof(char) + 40 * sizeof(char) + 40 * sizeof(char));
   close(fd);
 
-  //ESPERAR PELA RESPOSTA DO SERVIDOR ANTES DE CONTINUAR
+  // esperar pela resposta antes do servidor antes de continuar
   fd = open(own_resp_pipe_path, O_RDONLY);
   wait_for_response(fd);
   close(fd);
   //if isto falhar, imprime mensagem de erro e lança uma mensagem de login quando der
   //FIXME \n
-
-  //FIXME RETURN???
   return 0;
 }
+
 
 int ems_quit(void) { 
   char command = '2';
@@ -67,6 +63,7 @@ int ems_quit(void) {
 
   return 1;
 }
+
 
 int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols) {
   // send create request to the server (through the request pipe) and wait for the response (through the response pipe)
@@ -90,6 +87,7 @@ int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols) {
   return response;
 }
 
+
 int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys) {
   // send reserve request to the server (through the request pipe) and wait for the response (through the response pipe)
   char command = '4';
@@ -111,6 +109,7 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
   printf("Reserve response: %d\n", response);
   return response;
 }
+
 
 int ems_show(int out_fd, unsigned int event_id) {
   size_t num_rows, num_cols;
@@ -176,6 +175,7 @@ int ems_show(int out_fd, unsigned int event_id) {
   return response;
 }
 
+
 int ems_list_events(int out_fd) {
   // send list request to the server (through the request pipe) and wait for the response (through the response pipe)
   size_t num_events;
@@ -193,7 +193,6 @@ int ems_list_events(int out_fd) {
     read(fd, &num_events, sizeof(size_t));
 
     ids = malloc(num_events * sizeof(unsigned int));
-    //malloc pode ser 0, aloca???
 
     read(fd, ids, num_events * sizeof(unsigned int));
     close(fd);
@@ -206,7 +205,7 @@ int ems_list_events(int out_fd) {
       free(ids);
       return 1;
     }
-    free(ids); //se malloc for 0, isto aloca?
+    free(ids);
     return 0;
   }
 
