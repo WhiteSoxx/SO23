@@ -89,11 +89,8 @@ void* thread_workplace(void* thread_id) {
   active = 1;
   
   fd = open(resp_pipe_path, O_WRONLY | O_TRUNC);
-  if(fd == -1) { // safe open
-    fprintf(stderr, "[Err]: open failed: %d\n",(errno));
-    exit(EXIT_FAILURE);
-  }
-  write(fd, &session_id, sizeof(int));
+  safe_open(fd);
+  safe_write(fd, &session_id, sizeof(int));
   close(fd);
 
   pthread_cond_signal(&request_buffer.not_full);
@@ -101,7 +98,8 @@ void* thread_workplace(void* thread_id) {
 
   while(active) {
   fd = open(req_pipe_path, O_RDONLY);
-    if(read(fd, &operation_code, sizeof(char)) > 0) {
+  safe_open(fd);
+    if(safe_read(fd, &operation_code, sizeof(char)) > 0) {
       puts("operation_code: ");
       printf("%d\n", session_id);
       switch(operation_code) {
@@ -118,39 +116,43 @@ void* thread_workplace(void* thread_id) {
         case '3': // ems_create
           
             // ler pipe
-            read(fd, &event_id, sizeof(unsigned int));
-            read(fd, &num_rows, sizeof(size_t));
-            read(fd, &num_cols, sizeof(size_t));
+            safe_read(fd, &event_id, sizeof(unsigned int));
+            safe_read(fd, &num_rows, sizeof(size_t));
+            safe_read(fd, &num_cols, sizeof(size_t));
             close(fd);
 
             // pipe de resposta
             fd = open(resp_pipe_path, O_WRONLY | O_TRUNC);
+            safe_open(fd);
             resp = ems_create(event_id, num_rows, num_cols);
-            write(fd, &resp, sizeof(int));
+            safe_write
+        (fd, &resp, sizeof(int));
             break;
 
         case '4': // ems_reserve
 
           // ler pipe
-          read(fd, &event_id, sizeof(unsigned int));
-          read(fd, &num_seats, sizeof(size_t));
+          safe_read(fd, &event_id, sizeof(unsigned int));
+          safe_read(fd, &num_seats, sizeof(size_t));
 
           // alocar arrays
           size_t* xs = malloc(num_seats * sizeof(size_t));
           size_t* ys = malloc(num_seats * sizeof(size_t));
 
           // ler xs e ys
-          read(fd, xs, num_seats * sizeof(size_t));
-          read(fd, ys, num_seats * sizeof(size_t));
+          safe_read(fd, xs, num_seats * sizeof(size_t));
+          safe_read(fd, ys, num_seats * sizeof(size_t));
 
           close(fd);
 
           fd = open(resp_pipe_path, O_WRONLY | O_TRUNC);
+          safe_open(fd);
 
           // pipe de resposta
           resp = ems_reserve(event_id, num_seats, xs, ys);
 
-          write(fd, &resp, sizeof(int));
+          safe_write
+      (fd, &resp, sizeof(int));
 
           free(xs);
           free(ys);
@@ -159,10 +161,11 @@ void* thread_workplace(void* thread_id) {
         case '5': // ems_show
 
           // ler pipe
-          read(fd, &event_id, sizeof(unsigned int));
+          safe_read(fd, &event_id, sizeof(unsigned int));
           close(fd);
 
           fd = open(resp_pipe_path, O_WRONLY | O_TRUNC);
+          safe_open(fd);
           
           // pipe de resposta dentro do ems_show
           ems_show(fd, event_id);
@@ -173,6 +176,7 @@ void* thread_workplace(void* thread_id) {
           close(fd);
 
           fd = open(resp_pipe_path, O_WRONLY | O_TRUNC);
+          safe_open(fd);
 
           // pipe de resposta dentro do ems_list_events
           ems_list_events(fd);
@@ -191,6 +195,7 @@ int process_client_requests(char* server_pipe) {
   char operation_code;
   int fd;
   fd = open(server_pipe, O_RDONLY);
+  safe_open(fd);
 
   signal(SIGUSR1, signal_handler);
 
@@ -200,8 +205,8 @@ int process_client_requests(char* server_pipe) {
       signal_received = 0;
     }
     
-    if(read(fd, &operation_code, sizeof(char)) > 0) {
-    // Read from pipe
+    if(safe_read(fd, &operation_code, sizeof(char)) > 0) {
+    // safe_read from pipe
     switch(operation_code) { // login
       case '1':
         char a[40];
@@ -209,8 +214,8 @@ int process_client_requests(char* server_pipe) {
         memset(a, '\0', 40);
         memset(b, '\0', 40);
 
-        read(fd, a, 40);
-        read(fd, b, 40);
+        safe_read(fd, a, 40);
+        safe_read(fd, b, 40);
         puts("waiting!\n");
         printf("a: %s\n", a);
         printf("b: %s\n", b);
