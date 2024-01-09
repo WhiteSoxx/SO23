@@ -16,7 +16,7 @@ int session_id;
 
 int wait_for_response(int fd) {
   int response;
-  while(read(fd, &response, sizeof(int))) {
+  while(safe_read(fd, &response, sizeof(int))) {
     if (response == 0 || response == 1) {
       return response;
     }
@@ -39,15 +39,15 @@ int ems_setup(char const* req_pipe_path, char const* resp_pipe_path, char const*
   memcpy(buffer + sizeof(char) + 40 * sizeof(char), resp_pipe_path, 40 * sizeof(char));
 
   int fd = open(server_pipe_path, O_WRONLY);
-  write(fd, buffer, sizeof(char) + 40 * sizeof(char) + 40 * sizeof(char));
+  safe_open(fd);
+  safe_write(fd, buffer, sizeof(char) + 40 * sizeof(char) + 40 * sizeof(char));
   close(fd);
 
   // esperar pela resposta antes do servidor antes de continuar
   fd = open(own_resp_pipe_path, O_RDONLY);
+  safe_open(fd);
   wait_for_response(fd);
   close(fd);
-  //if isto falhar, imprime mensagem de erro e lança uma mensagem de login quando der
-  //FIXME \n
   return 0;
 }
 
@@ -56,7 +56,8 @@ int ems_quit(void) {
   char command = '2';
 
   int fd = open(own_req_pipe_path, O_WRONLY | O_TRUNC);
-  write(fd, &command, sizeof(char));
+  safe_open(fd);
+  safe_write(fd, &command, sizeof(char));
   close(fd);
 
   exit(0);
@@ -76,10 +77,12 @@ int ems_create(unsigned int event_id, size_t num_rows, size_t num_cols) {
   memcpy(buffer + sizeof(char) + sizeof(unsigned int) + sizeof(size_t), &num_cols, sizeof(size_t));
 
   int fd = open(own_req_pipe_path, O_WRONLY | O_TRUNC);
-  write(fd, buffer, sizeof(char) + sizeof(unsigned int) + sizeof(size_t) + sizeof(size_t));
+  safe_open(fd);
+  safe_write(fd, buffer, sizeof(char) + sizeof(unsigned int) + sizeof(size_t) + sizeof(size_t));
   close(fd);
 
   fd = open(own_resp_pipe_path, O_RDONLY);
+  safe_open(fd);
   int response = wait_for_response(fd);
   close(fd);
 
@@ -100,10 +103,12 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
   memcpy(buffer + sizeof(char) + sizeof(unsigned int) + sizeof(size_t) + num_seats * sizeof(size_t), ys, num_seats * sizeof(size_t));
 
   int fd = open(own_req_pipe_path, O_WRONLY | O_TRUNC);
-  write(fd, buffer, sizeof(char) + sizeof(unsigned int) + sizeof(size_t) + num_seats * sizeof(size_t) + num_seats * sizeof(size_t));
+  safe_open(fd);
+  safe_write(fd, buffer, sizeof(char) + sizeof(unsigned int) + sizeof(size_t) + num_seats * sizeof(size_t) + num_seats * sizeof(size_t));
   close(fd);
 
   fd = open(own_resp_pipe_path, O_RDONLY);
+  safe_open(fd);
   int response = wait_for_response(fd);
   close(fd);
   printf("Reserve response: %d\n", response);
@@ -125,19 +130,21 @@ int ems_show(int out_fd, unsigned int event_id) {
   memcpy(buffer + sizeof(char), &event_id, sizeof(unsigned int));
 
   int fd = open(own_req_pipe_path, O_WRONLY | O_TRUNC);
-  write(fd, buffer, sizeof(char) + sizeof(unsigned int));
+  safe_open(fd);
+  safe_write(fd, buffer, sizeof(char) + sizeof(unsigned int));
   close(fd);
 
   fd = open(own_resp_pipe_path, O_RDONLY);
+  safe_open(fd);
   int response = wait_for_response(fd);
 
   if (response == 0) {
-    read(fd, &num_rows, sizeof(size_t));
-    read(fd, &num_cols, sizeof(size_t));
+    safe_read(fd, &num_rows, sizeof(size_t));
+    safe_read(fd, &num_cols, sizeof(size_t));
 
     seats = malloc(num_rows * num_cols * sizeof(unsigned int));
 
-    read(fd, seats, num_rows * num_cols * sizeof(unsigned int));
+    safe_read(fd, seats, num_rows * num_cols * sizeof(unsigned int));
     close(fd);
   
   
@@ -183,18 +190,20 @@ int ems_list_events(int out_fd) {
   
   char command = '6';
   int fd = open(own_req_pipe_path, O_WRONLY | O_TRUNC);
-  write(fd, &command, sizeof(char));
+  safe_open(fd);
+  safe_write(fd, &command, sizeof(char));
   close(fd);
 
   fd = open(own_resp_pipe_path, O_RDONLY);
+  safe_open(fd);
   int response = wait_for_response(fd);
 
   if (response == 0) {
-    read(fd, &num_events, sizeof(size_t));
+    safe_read(fd, &num_events, sizeof(size_t));
 
     ids = malloc(num_events * sizeof(unsigned int));
 
-    read(fd, ids, num_events * sizeof(unsigned int));
+    safe_read(fd, ids, num_events * sizeof(unsigned int));
     close(fd);
   
 

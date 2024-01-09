@@ -8,9 +8,17 @@
 #include "common/constants.h"
 #include "parser.h"
 
-
+void signal_handler(int signal) {
+  if (signal == SIGINT) {
+    ems_quit();
+    exit(0);
+  }
+}
 
 int main(int argc, char* argv[]) {
+
+  signal(SIGINT, signal_handler);
+
   if (argc < 5) {
     fprintf(stderr, "Usage: %s <request pipe path> <response pipe path> <server pipe path> <.jobs file path>\n",
             argv[0]);
@@ -34,12 +42,14 @@ int main(int argc, char* argv[]) {
   strcpy(strrchr(out_path, '.'), ".out");
 
   int in_fd = open(argv[4], O_RDONLY);
+  safe_open(in_fd);
   if (in_fd == -1) {
     fprintf(stderr, "Failed to open input file. Path: %s\n", argv[4]);
     return 1;
   }
 
   int out_fd = open(out_path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+  safe_open(out_fd);
   if (out_fd == -1) {
     fprintf(stderr, "Failed to open output file. Path: %s\n", out_path);
     return 1;

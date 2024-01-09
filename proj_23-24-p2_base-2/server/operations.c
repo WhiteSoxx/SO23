@@ -11,31 +11,6 @@
 static struct EventList* event_list = NULL;
 static unsigned int state_access_delay_us = 0;
 
-void safe_open(int fd) {
-  if(fd == -1) {
-    fprintf(stderr, "[Err]: open failed: %d\n",(errno));
-    exit(EXIT_FAILURE);
-  }
-}
-
-
-void safe_write(int fd, void *session_id, size_t count) {
-  ssize_t bytes_written;
-    do {
-        bytes_written = write(fd, session_id, count);
-    } while (bytes_written < 0 && errno == EINTR);
-    return bytes_written;
-}
-
-
-void safe_read(int fd, void* operation_code, size_t count) {
-  ssize_t bytes_read;
-    do {
-        bytes_read = read(fd, operation_code, count);
-    } while (bytes_read < 0 && errno == EINTR);
-    return bytes_read;
-}
-
 
 int status_signal() {
     for (struct ListNode* current = event_list->head; current != NULL; current = current->next) {
@@ -248,7 +223,7 @@ int ems_reserve(unsigned int event_id, size_t num_seats, size_t* xs, size_t* ys)
 }
 
 
-int ems_show(int out_fd, unsigned int event_id) { //isto tem de ser com um buffer por causa do int retorno FIXME
+int ems_show(int out_fd, unsigned int event_id) {
   if (event_list == NULL) {
     fprintf(stderr, "EMS state must be initialized\n");
     return 1;

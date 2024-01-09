@@ -10,19 +10,19 @@
 
 static void cleanup(int fd) {
   char ch;
-  while (read(fd, &ch, 1) == 1 && ch != '\n')
+  while (safe_read(fd, &ch, 1) == 1 && ch != '\n')
     ;
 }
 
 enum Command get_next(int fd) {
   char buf[16];
-  if (read(fd, buf, 1) != 1) {
+  if (safe_read(fd, buf, 1) != 1) {
     return EOC;
   }
 
   switch (buf[0]) {
     case 'C':
-      if (read(fd, buf + 1, 6) != 6 || strncmp(buf, "CREATE ", 7) != 0) {
+      if (safe_read(fd, buf + 1, 6) != 6 || strncmp(buf, "CREATE ", 7) != 0) {
         cleanup(fd);
         return CMD_INVALID;
       }
@@ -30,7 +30,7 @@ enum Command get_next(int fd) {
       return CMD_CREATE;
 
     case 'R':
-      if (read(fd, buf + 1, 7) != 7 || strncmp(buf, "RESERVE ", 8) != 0) {
+      if (safe_read(fd, buf + 1, 7) != 7 || strncmp(buf, "RESERVE ", 8) != 0) {
         cleanup(fd);
         return CMD_INVALID;
       }
@@ -38,7 +38,7 @@ enum Command get_next(int fd) {
       return CMD_RESERVE;
 
     case 'S':
-      if (read(fd, buf + 1, 4) != 4 || strncmp(buf, "SHOW ", 5) != 0) {
+      if (safe_read(fd, buf + 1, 4) != 4 || strncmp(buf, "SHOW ", 5) != 0) {
         cleanup(fd);
         return CMD_INVALID;
       }
@@ -46,12 +46,12 @@ enum Command get_next(int fd) {
       return CMD_SHOW;
 
     case 'L':
-      if (read(fd, buf + 1, 3) != 3 || strncmp(buf, "LIST", 4) != 0) {
+      if (safe_read(fd, buf + 1, 3) != 3 || strncmp(buf, "LIST", 4) != 0) {
         cleanup(fd);
         return CMD_INVALID;
       }
 
-      if (read(fd, buf + 4, 1) != 0 && buf[4] != '\n') {
+      if (safe_read(fd, buf + 4, 1) != 0 && buf[4] != '\n') {
         cleanup(fd);
         return CMD_INVALID;
       }
@@ -59,7 +59,7 @@ enum Command get_next(int fd) {
       return CMD_LIST_EVENTS;
 
     case 'W':
-      if (read(fd, buf + 1, 4) != 4 || strncmp(buf, "WAIT ", 5) != 0) {
+      if (safe_read(fd, buf + 1, 4) != 4 || strncmp(buf, "WAIT ", 5) != 0) {
         cleanup(fd);
         return CMD_INVALID;
       }
@@ -67,12 +67,12 @@ enum Command get_next(int fd) {
       return CMD_WAIT;
 
     case 'H':
-      if (read(fd, buf + 1, 3) != 3 || strncmp(buf, "HELP", 4) != 0) {
+      if (safe_read(fd, buf + 1, 3) != 3 || strncmp(buf, "HELP", 4) != 0) {
         cleanup(fd);
         return CMD_INVALID;
       }
 
-      if (read(fd, buf + 4, 1) != 0 && buf[4] != '\n') {
+      if (safe_read(fd, buf + 4, 1) != 0 && buf[4] != '\n') {
         cleanup(fd);
         return CMD_INVALID;
       }
@@ -125,14 +125,14 @@ size_t parse_reserve(int fd, size_t max, unsigned int *event_id, size_t *xs, siz
     return 0;
   }
 
-  if (read(fd, &ch, 1) != 1 || ch != '[') {
+  if (safe_read(fd, &ch, 1) != 1 || ch != '[') {
     cleanup(fd);
     return 0;
   }
 
   size_t num_coords = 0;
   while (num_coords < max) {
-    if (read(fd, &ch, 1) != 1 || ch != '(') {
+    if (safe_read(fd, &ch, 1) != 1 || ch != '(') {
       cleanup(fd);
       return 0;
     }
@@ -153,7 +153,7 @@ size_t parse_reserve(int fd, size_t max, unsigned int *event_id, size_t *xs, siz
 
     num_coords++;
 
-    if (read(fd, &ch, 1) != 1 || (ch != ' ' && ch != ']')) {
+    if (safe_read(fd, &ch, 1) != 1 || (ch != ' ' && ch != ']')) {
       cleanup(fd);
       return 0;
     }
@@ -168,7 +168,7 @@ size_t parse_reserve(int fd, size_t max, unsigned int *event_id, size_t *xs, siz
     return 0;
   }
 
-  if (read(fd, &ch, 1) != 1 || (ch != '\n' && ch != '\0')) {
+  if (safe_read(fd, &ch, 1) != 1 || (ch != '\n' && ch != '\0')) {
     cleanup(fd);
     return 0;
   }

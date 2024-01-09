@@ -6,6 +6,7 @@
 #include <pthread.h>
 #include <errno.h>
 #include <signal.h>
+#include <stdlib.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -15,6 +16,8 @@
 #include "common/constants.h"
 #include "common/io.h"
 #include "operations.h"
+
+
 
 typedef struct sessions sessions_t;
 
@@ -33,8 +36,8 @@ typedef struct {
 typedef struct sessions {
   pthread_t thread;
   int session_id;
-  char* req_pipe_path;
-  char* resp_pipe_path;
+  char req_pipe_path[40];
+  char resp_pipe_path[40];
   request_buffer_t* request_buffer;
 } sessions_t;
 
@@ -45,7 +48,23 @@ sessions_t* sessions;
 int new_session_id = 0;
 int signal_received = 0;
 
+pthread_mutex_t signal_lock;
+
 request_buffer_t request_buffer;
+
+ssize_t safe_read_server(int fd, void* buffer, size_t count) {
+  ssize_t bytes_read;
+    do {
+        bytes_read = read(fd, buffer, count);
+        pthread_mutex_lock(&signal_lock);
+        if(signal_received) {
+          status_signal();
+          signal_received = 0;
+        }
+        pthread_mutex_unlock(&signal_lock);
+    } while (bytes_read < 0 && errno == EINTR);
+    return bytes_read;
+}
 
 
 // função que envia o sinal SIGUSR1 para o processo
@@ -75,17 +94,29 @@ void* thread_workplace(void* thread_id) {
   int active;
 
   while(1) {
+  pthread_mutex_lock(&signal_lock);
+    if(signal_received) {
+      status_signal();
+      signal_received = 0;
+    }
+  pthread_mutex_unlock(&signal_lock);
   pthread_mutex_lock(&request_buffer.mutex);
-  printf("got in: %d\n", session_id);
-  while(request_buffer.size == 0) pthread_cond_wait(&request_buffer.not_empty, &request_buffer.mutex);
-  printf("got out: %d\n", session_id);
+  while(request_buffer.size == 0) {
+    pthread_mutex_lock(&signal_lock);
+    if(signal_received) {
+      status_signal();
+      signal_received = 0;
+    }
+    pthread_mutex_unlock(&signal_lock);
+    pthread_cond_wait(&request_buffer.not_empty, &request_buffer.mutex);
+
+  }
   strcpy(req_pipe_path, request_buffer.buffer[request_buffer.front].req_pipe_path);
   strcpy(resp_pipe_path, request_buffer.buffer[request_buffer.front].resp_pipe_path);
   request_buffer.front++;
   if(request_buffer.front == S) request_buffer.front = 0;
   request_buffer.size--;
 
-  printf("session_id: %d\n", session_id);
   active = 1;
   
   fd = open(resp_pipe_path, O_WRONLY | O_TRUNC);
@@ -97,94 +128,95 @@ void* thread_workplace(void* thread_id) {
   pthread_mutex_unlock(&request_buffer.mutex);
 
   while(active) {
-  fd = open(req_pipe_path, O_RDONLY);
-  safe_open(fd);
-    if(safe_read(fd, &operation_code, sizeof(char)) > 0) {
-      puts("operation_code: ");
-      printf("%d\n", session_id);
-      switch(operation_code) {
-        case '2': // ems_quit
-          
-          // não suporta mais que uma sessão
-          close(fd);
-          unlink(req_pipe_path);
-          unlink(resp_pipe_path);
-          active = 0;
-          puts("quit!\n");
-          break;
+    pthread_mutex_lock(&signal_lock);
+    if(signal_received) {
+      status_signal();
+      signal_received = 0;
+    }
+    pthread_mutex_unlock(&signal_lock);
 
-        case '3': // ems_create
+    fd = open(req_pipe_path, O_RDONLY);
+    safe_open(fd);
+      if(safe_read_server(fd, &operation_code, sizeof(char)) > 0) {
+        switch(operation_code) {
+          case '2': // ems_quit
           
-            // ler pipe
-            safe_read(fd, &event_id, sizeof(unsigned int));
-            safe_read(fd, &num_rows, sizeof(size_t));
-            safe_read(fd, &num_cols, sizeof(size_t));
             close(fd);
-
-            // pipe de resposta
-            fd = open(resp_pipe_path, O_WRONLY | O_TRUNC);
-            safe_open(fd);
-            resp = ems_create(event_id, num_rows, num_cols);
-            safe_write
-        (fd, &resp, sizeof(int));
+            unlink(req_pipe_path);
+            unlink(resp_pipe_path);
+            active = 0;
             break;
 
-        case '4': // ems_reserve
+          case '3': // ems_create
 
-          // ler pipe
-          safe_read(fd, &event_id, sizeof(unsigned int));
-          safe_read(fd, &num_seats, sizeof(size_t));
+              // ler pipe
+              safe_read_server(fd, &event_id, sizeof(unsigned int));
+              safe_read_server(fd, &num_rows, sizeof(size_t));
+              safe_read_server(fd, &num_cols, sizeof(size_t));
+              close(fd);
 
-          // alocar arrays
-          size_t* xs = malloc(num_seats * sizeof(size_t));
-          size_t* ys = malloc(num_seats * sizeof(size_t));
+              // pipe de resposta
+              fd = open(resp_pipe_path, O_WRONLY | O_TRUNC);
+              safe_open(fd);
+              resp = ems_create(event_id, num_rows, num_cols);
+              safe_write(fd, &resp, sizeof(int));
+              break;
 
-          // ler xs e ys
-          safe_read(fd, xs, num_seats * sizeof(size_t));
-          safe_read(fd, ys, num_seats * sizeof(size_t));
+          case '4': // ems_reserve
 
-          close(fd);
+            // ler pipe
+            safe_read_server(fd, &event_id, sizeof(unsigned int));
+            safe_read_server(fd, &num_seats, sizeof(size_t));
 
-          fd = open(resp_pipe_path, O_WRONLY | O_TRUNC);
-          safe_open(fd);
+            // alocar arrays
+            size_t* xs = malloc(num_seats * sizeof(size_t));
+            size_t* ys = malloc(num_seats * sizeof(size_t));
+
+            // ler xs e ys
+            safe_read_server(fd, xs, num_seats * sizeof(size_t));
+            safe_read_server(fd, ys, num_seats * sizeof(size_t));
+
+            close(fd);
+
+            fd = open(resp_pipe_path, O_WRONLY | O_TRUNC);
+            safe_open(fd);
 
           // pipe de resposta
-          resp = ems_reserve(event_id, num_seats, xs, ys);
+            resp = ems_reserve(event_id, num_seats, xs, ys);
 
-          safe_write
-      (fd, &resp, sizeof(int));
+            safe_write(fd, &resp, sizeof(int));
 
-          free(xs);
-          free(ys);
-          break;
+            free(xs);
+            free(ys);
+            break;
       
-        case '5': // ems_show
+          case '5': // ems_show
 
           // ler pipe
-          safe_read(fd, &event_id, sizeof(unsigned int));
-          close(fd);
+            safe_read_server(fd, &event_id, sizeof(unsigned int));
+            close(fd);
 
-          fd = open(resp_pipe_path, O_WRONLY | O_TRUNC);
-          safe_open(fd);
+            fd = open(resp_pipe_path, O_WRONLY | O_TRUNC);
+            safe_open(fd);
           
-          // pipe de resposta dentro do ems_show
-          ems_show(fd, event_id);
-          break;
+            // pipe de resposta dentro do ems_show
+            ems_show(fd, event_id);
+            break;
 
-        case '6': // ems_list_events
+          case '6': // ems_list_events
 
-          close(fd);
+            close(fd);
 
-          fd = open(resp_pipe_path, O_WRONLY | O_TRUNC);
-          safe_open(fd);
+            fd = open(resp_pipe_path, O_WRONLY | O_TRUNC);
+            safe_open(fd);
 
-          // pipe de resposta dentro do ems_list_events
-          ems_list_events(fd);
-          break;
-    }
-    }
+            // pipe de resposta dentro do ems_list_events
+            ems_list_events(fd);
+            break;
+        }
+      }
     close(fd);
-  }
+    }
   }
   return NULL;
 }
@@ -205,8 +237,8 @@ int process_client_requests(char* server_pipe) {
       signal_received = 0;
     }
     
-    if(safe_read(fd, &operation_code, sizeof(char)) > 0) {
-    // safe_read from pipe
+    if(safe_read_server(fd, &operation_code, sizeof(char)) > 0) {
+    // safe_read_server from pipe
     switch(operation_code) { // login
       case '1':
         char a[40];
@@ -214,20 +246,16 @@ int process_client_requests(char* server_pipe) {
         memset(a, '\0', 40);
         memset(b, '\0', 40);
 
-        safe_read(fd, a, 40);
-        safe_read(fd, b, 40);
-        puts("waiting!\n");
-        printf("a: %s\n", a);
-        printf("b: %s\n", b);
+        safe_read_server(fd, a, 40);
+        safe_read_server(fd, b, 40);
 
         pthread_mutex_lock(&request_buffer.mutex);
         while(request_buffer.size == S) {
-          puts("waiting for buffer to be empty!\n");
           pthread_cond_wait(&request_buffer.not_full, &request_buffer.mutex);
         }
         sessions_t* new_session = malloc(sizeof(sessions_t));
-        new_session->req_pipe_path = a;
-        new_session->resp_pipe_path = b;
+        strcpy(new_session->req_pipe_path, a);
+        strcpy(new_session->resp_pipe_path, b);
         request_buffer.buffer[request_buffer.rear] = *new_session;
         request_buffer.rear++;
         if(request_buffer.rear == S) request_buffer.rear = 0;
@@ -243,6 +271,8 @@ int process_client_requests(char* server_pipe) {
 
 // função main
 int main(int argc, char* argv[]) {
+  pthread_mutex_init(&signal_lock, NULL);
+
   if (argc < 2 || argc > 3) {
     fprintf(stderr, "Usage: %s\n <pipe_path> [delay]\n", argv[0]);
     return 1;

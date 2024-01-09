@@ -4,6 +4,33 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <errno.h>
+#include <stdio.h>
+
+void safe_open(int fd) {
+  if(fd == -1) {
+    fprintf(stderr, "[Err]: open failed: %d\n",(errno));
+    exit(EXIT_FAILURE);
+  }
+}
+
+
+ssize_t safe_write(int fd, void* buffer, size_t count) {
+  ssize_t bytes_written;
+    do {
+        bytes_written = write(fd, buffer, count);
+    } while (bytes_written < 0 && errno == EINTR);
+    return bytes_written;
+}
+
+
+ssize_t safe_read(int fd, void* buffer, size_t count) {
+  ssize_t bytes_read;
+    do {
+        bytes_read = read(fd, buffer, count);
+    } while (bytes_read < 0 && errno == EINTR);
+    return bytes_read;
+}
 
 int parse_uint(int fd, unsigned int *value, char *next) {
   char buf[16];

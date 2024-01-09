@@ -1,4 +1,4 @@
 #define MAX_RESERVATION_SIZE 256
 #define STATE_ACCESS_DELAY_US 500000  // 500ms
 #define MAX_JOB_FILE_NAME_SIZE 256
-#define S 8 // mudamos de MAX_SESSION_COUNT para S
+#define S 3 // mudamos de MAX_SESSION_COUNT para S

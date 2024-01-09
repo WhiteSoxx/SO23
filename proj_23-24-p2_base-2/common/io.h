@@ -1,6 +1,13 @@
 #ifndef COMMON_IO_H
 #define COMMON_IO_H
 
+#include <stddef.h>
+#include <sys/types.h>
+void safe_open(int fd);
+ssize_t safe_write(int fd, void* buffer, size_t count);
+ssize_t safe_read(int fd, void* buffer, size_t count);
+
+
 /// Parses an unsigned integer from the given file descriptor.
 /// @param fd The file descriptor to read from.
 /// @param value Pointer to the variable to store the value in.
